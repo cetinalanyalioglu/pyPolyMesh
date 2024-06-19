@@ -1,0 +1,8 @@
+*
+!*/
+!.gitignore
+!pypolymesh/*
+!pyproject.toml
+!README.md
+!poetry.lock
+!requirements-dev.txt
