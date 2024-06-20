@@ -2058,46 +2058,49 @@ class PolyMesh:
         face_2 = self.face_points(_faces[1])
         if verbose > 2:
             print(f"Selected face {_faces[0]} as face_1")
+        # Pick anchor points
         for i in range(face_1.size):
             next = (i + 1) % face_1.size
             if face_1[i] in common_points and face_1[next] in common_points:
-                anchor = face_1[next]
+                anchor_1 = face_1[next]
+                anchor_2 = face_1[i]
+                break
+        # Verify ordering and reverse face_2 in case of opposite orientations
+        for i in range(face_2.size):
+            next = (i + 1) % face_2.size
+            if face_2[i] in common_points and face_2[next] in common_points:
+                _anchor_1 = face_2[next]
+                _anchor_2 = face_2[i]
                 break
         if verbose > 2:
-            print(f"Using point {anchor} as anchor")
+            print(f"Using point {anchor_1} as anchor_1")
+            print(f"Using point {anchor_2} as anchor_2")
+        # Face orientations are different (one is CCW, one is CW), reverse face_2
+        if (anchor_1 == _anchor_1) and (anchor_2 == _anchor_2):
+            if verbose > 1:
+                print('Face have opposite orientations, reversing orientation of "face_2"')
+                face_2 = face_2[::-1]
         # Assemble the merged face
         merged_face = []
-        idx_anchor_face_1 = np.argwhere(face_1 == anchor)[0][0]
-        idx_anchor_face_2 = np.argwhere(face_2 == anchor)[0][0]
+        idx_anchor_1_face_1 = np.argwhere(face_1 == anchor_1)[0][0]
+        idx_anchor_2_face_2 = np.argwhere(face_2 == anchor_2)[0][0]
         if verbose > 2:
-            print(f"Index of anchor point in face_1 is {idx_anchor_face_1}")
-            print(f"Index of anchor point in face_2 is {idx_anchor_face_2}")
-        for i in range(idx_anchor_face_1, idx_anchor_face_1 + face_1.size):
-            merged_face.insert(-1, face_1[i % face_1.size])
-        for i in range(
-            idx_anchor_face_2 + len(common_points),
-            idx_anchor_face_2 + len(common_points) + face_2.size,
-        ):
-            merged_face.insert(len(merged_face), face_2[i % face_2.size])
+            print(f"Index of anchor point 1 in face_1 is {idx_anchor_1_face_1}")
+            print(f"Index of anchor point 2 in face_2 is {idx_anchor_2_face_2}")
+        for i in range(idx_anchor_1_face_1 + 1, idx_anchor_1_face_1 + face_1.size - 1):
+            # merged_face.insert(-1, face_1[i % face_1.size])
+            merged_face.append(face_1[i % face_1.size])
+        for i in range(idx_anchor_2_face_2, idx_anchor_2_face_2 + face_2.size):
+            # merged_face.insert(-1, face_2[i % face_2.size])
+            merged_face.append(face_2[i % face_2.size])
         if verbose > 2:
             print(f"Initial point ordering after attaching point loops {merged_face}")
         # Remove points to delete in the new face definition
         for point in points_to_delete:
             while point in merged_face:
                 merged_face.remove(point)
-            common_points.remove(point)
         if verbose > 2:
             print(f"Point ordering after removing points to delete {merged_face}")
-        # At this stage the common point(s) to be kept have 2 occurences, we need to remove one
-        for point in common_points:
-            if point == anchor:
-                merged_face.remove(point)
-            else:
-                merged_face.reverse()
-                merged_face.remove(point)
-                merged_face.reverse()
-        if verbose > 1:
-            print(f"Final point ordering after removing extra common point {merged_face}")
 
         return np.array(merged_face, dtype=self.__face_point_list.dtype)
 
