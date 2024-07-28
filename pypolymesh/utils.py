@@ -259,14 +259,14 @@ def read_faces(
         for line in lines[1:-1]:
             _indices.append(line[0])
             _points.extend([point for point in line[2:-2].split()])
-        indices = np.cumsum(np.array(_indices, dtype=dtype))
+        indices = np.cumsum(np.array(_indices, dtype=dtype), dtype=dtype)
         points = np.array(_points, dtype=dtype)
 
     if verbose > 0:
         toc = time.perf_counter()
         print(f"read {len(indices) -1 } faces in {toc - tic:0.4f} seconds.", flush=True)
 
-    return np.array(indices), np.array(points)
+    return indices, points
 
 
 def write_faces(
