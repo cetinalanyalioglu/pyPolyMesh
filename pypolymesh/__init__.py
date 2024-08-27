@@ -1,3 +1,5 @@
+from .connectivity import build_cell_face_list
+from .connectivity import build_cell_point_list
 from .polymesh import PolyMesh
 from .utils import read_faces
 from .utils import read_scalar_field
@@ -18,4 +20,6 @@ __all__ = [
     "write_faces",
     "write_scalar_field",
     "write_vector_field",
+    "build_cell_face_list",
+    "build_cell_point_list",
 ]

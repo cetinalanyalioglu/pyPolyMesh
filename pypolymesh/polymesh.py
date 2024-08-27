@@ -1322,64 +1322,6 @@ class PolyMesh:
 
     @staticmethod
     @nb.jit(nopython=True, fastmath=True, parallel=False, boundscheck=False)
-    def __build_cell_face_list(
-        face_owner: NDArray, face_neighbour: NDArray, maximum_cell_faces: int = 20
-    ) -> Tuple[NDArray, NDArray]:
-        """Computes cell definitions in terms of faces (similar to "compactFaceList").
-
-        This routine can be used to compute cell definitions in advance to obtain cell indices from
-        points and faces without performing expensive computations.
-
-        Parameters
-        ----------
-        face_owner : NDArray
-            Face owner array
-        face_neighbour : NDArray
-            Face neighbour array
-        maximum_cell_faces : int, optional
-            Maximum number of faces a cell can have, by default 20. This is only used to
-            pre-allocate a safe amount of memory during operations.
-
-        Returns
-        -------
-        Tuple[NDArray, NDArray]
-            Cell face index array and cell face arrays
-        """
-
-        dtype = face_owner.dtype
-        # Compute number of cells
-        n_cells = max(np.max(face_owner), np.max(face_neighbour)) + 1
-        n_faces = face_owner.size
-        # Initialize arrays, overallocate cell faces to reduce later
-        cell_face_indices = np.zeros(
-            n_cells, dtype=dtype
-        )  # This acts as cell face count in below loops
-        cell_face_list = np.full((n_cells, maximum_cell_faces), -1, dtype=dtype)
-        # Find the start index of boundary faces
-        n_internal_faces = np.argmax(face_neighbour == -1)
-        # First loop within the range of internal faces - common for owner and neighbour
-        for face in range(n_internal_faces):
-            cell1 = face_owner[face]
-            cell2 = face_neighbour[face]
-            cell_face_indices[cell1] += 1
-            cell_face_indices[cell2] += 1
-            cell_face_list[cell1, cell_face_indices[cell1] - 1] = face
-            cell_face_list[cell2, cell_face_indices[cell2] - 1] = face
-        # Second loop - only for owner
-        for face in range(n_internal_faces, n_faces):
-            cell1 = face_owner[face]
-            cell_face_indices[cell1] += 1
-            cell_face_list[cell1, cell_face_indices[cell1] - 1] = face
-        # Reduce
-        cell_face_list = cell_face_list.flatten()
-        cell_face_list = cell_face_list[cell_face_list >= 0]
-        cell_face_indices = np.cumsum(cell_face_indices)
-        cell_face_indices = np.concatenate((np.array([0], dtype=dtype), cell_face_indices))
-
-        return cell_face_indices, cell_face_list
-
-    @staticmethod
-    @nb.jit(nopython=True, fastmath=True, parallel=False, boundscheck=False)
     def __parents_of_point(
         point: int,
         face_point_indices: NDArray,

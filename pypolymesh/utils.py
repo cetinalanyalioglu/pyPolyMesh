@@ -58,9 +58,7 @@ def __parse_header(filename: str, max_length=50) -> Tuple[int, int, dict]:
         raise ValueError(f'"format" key not found in FoamFile dictionary while reading {filename}')
 
     if header["format"] not in ["binary", "ascii"]:
-        raise ValueError(
-            f'Unknown format {header["format"]} in FoamFile dictionary while reading {filename}'
-        )
+        raise ValueError(f'Unknown format {header["format"]} in FoamFile dictionary while reading {filename}')
 
     return count, offset, header
 
@@ -101,9 +99,7 @@ def __read_dictionary(file_handle: Union[BinaryIO, TextIO], max_length=20) -> di
                 break
             except ValueError:
                 pass
-    raise RuntimeError(
-        f'Exceeded maximum dictionary length {max_length} during read while looking for "}}"'
-    )
+    raise RuntimeError(f'Exceeded maximum dictionary length {max_length} during read while looking for "}}"')
 
 
 def __remove_comments(text: str) -> str:
@@ -116,9 +112,7 @@ def __remove_comments(text: str) -> str:
         else:
             return s
 
-    pattern = re.compile(
-        r'//.*?$|/\*.*?\*/|\'(?:\\.|[^\\\'])*\'|"(?:\\.|[^\\"])*"', re.DOTALL | re.MULTILINE
-    )
+    pattern = re.compile(r'//.*?$|/\*.*?\*/|\'(?:\\.|[^\\\'])*\'|"(?:\\.|[^\\"])*"', re.DOTALL | re.MULTILINE)
     return re.sub(pattern, replacer, text)
 
 
@@ -179,9 +173,7 @@ def __dictionary_to_string(name: str, dictionary: dict) -> str:
     return result
 
 
-def read_faces(
-    filename: str, dtype: DTypeLike, byteorder="little", verbose=1
-) -> Tuple[NDArray, NDArray]:
+def read_faces(filename: str, dtype: DTypeLike, byteorder="little", verbose=1) -> Tuple[NDArray, NDArray]:
     """Reads the "faces" file and returns face definitions.
 
     The format of the file is taken from the "format" entry in the FoamFile dict.
@@ -230,8 +222,7 @@ def read_faces(
     if header["format"] == "binary":
         if byteorder not in ["big", "little"]:
             raise ValueError(
-                f'Invalid value "{byteorder}" for "byteorder", valid options are "little"'
-                ' (default), and "big"'
+                f'Invalid value "{byteorder}" for "byteorder", valid options are "little" (default), and "big"'
             )
         # Ensure the given dtype has the specified byteorder
         byteorder = "<" if byteorder == "little" else ">"
@@ -305,25 +296,18 @@ def write_faces(
 
     if point_indices.ndim != 1:
         raise ValueError(
-            "Face point index array should be one dimensional, but it has"
-            f" {point_indices.ndim} dimensions"
+            f"Face point index array should be one dimensional, but it has {point_indices.ndim} dimensions"
         )
     if point_list.ndim != 1:
-        raise ValueError(
-            "Face point list array should be one dimensional, but it has"
-            f" {point_indices.ndim} dimensions"
-        )
+        raise ValueError(f"Face point list array should be one dimensional, but it has {point_indices.ndim} dimensions")
 
     if header["format"] == "binary":
         if byteorder not in ["big", "little"]:
             raise ValueError(
-                f'Invalid value "{byteorder}" for "byteorder", valid options are "little"'
-                ' (default), and "big"'
+                f'Invalid value "{byteorder}" for "byteorder", valid options are "little" (default), and "big"'
             )
         if point_indices.dtype.byteorder != point_list.dtype.byteorder:
-            raise RuntimeError(
-                "Different byte orders in face point index and face point list arrays"
-            )
+            raise RuntimeError("Different byte orders in face point index and face point list arrays")
         # Ensure the given dtype has the specified byteorder
         current = point_indices.dtype.byteorder
         if current == "=":
@@ -349,11 +333,7 @@ def write_faces(
                 print(f"Writing binary file {filename} ...", end=" ")
             fh.write(bytes(__dictionary_to_string("FoamFile", header), encoding))
             fh.write(bytes(f"\n\n{point_indices.size}\n(", encoding))
-            (
-                fh.write(point_indices.byteswap().tobytes())
-                if swap
-                else fh.write(point_indices.tobytes())
-            )
+            (fh.write(point_indices.byteswap().tobytes()) if swap else fh.write(point_indices.tobytes()))
             fh.write(bytes(f"){point_list.size}\n", encoding))
             fh.write(b"(")
             (fh.write(point_list.byteswap().tobytes()) if swap else fh.write(point_list.tobytes()))
@@ -376,9 +356,7 @@ def write_faces(
         print(f"wrote {point_indices.size - 1} faces in {toc - tic:0.4f} seconds.", flush=True)
 
 
-def read_vector_field(
-    filename: str, dtype: DTypeLike, ndims=3, byteorder="little", verbose=1
-) -> NDArray:
+def read_vector_field(filename: str, dtype: DTypeLike, ndims=3, byteorder="little", verbose=1) -> NDArray:
     """Reads a vector field.
 
     The format of the file is taken from the "format" entry in the FoamFile dict.
@@ -412,8 +390,7 @@ def read_vector_field(
     if header["format"] == "binary":
         if byteorder not in ["big", "little"]:
             raise ValueError(
-                f'Invalid value "{byteorder}" for "byteorder", valid options are "little"'
-                ' (default), and "big"'
+                f'Invalid value "{byteorder}" for "byteorder", valid options are "little" (default), and "big"'
             )
         # Ensure the given dtype has the specified byteorder
         byteorder = "<" if byteorder == "little" else ">"
@@ -479,15 +456,12 @@ def write_vector_field(
         tic = time.perf_counter()
 
     if data.ndim != 2:
-        raise ValueError(
-            f"Input array should be two dimensional, but it has {data.ndim} dimensions"
-        )
+        raise ValueError(f"Input array should be two dimensional, but it has {data.ndim} dimensions")
 
     if header["format"] == "binary":
         if byteorder not in ["big", "little"]:
             raise ValueError(
-                f'Invalid value "{byteorder}" for "byteorder", valid options are "little"'
-                ' (default), and "big"'
+                f'Invalid value "{byteorder}" for "byteorder", valid options are "little" (default), and "big"'
             )
         # Ensure the given dtype has the specified byteorder
         current = data.dtype.byteorder
@@ -514,11 +488,7 @@ def write_vector_field(
                 print(f"Writing binary file {filename} ...", end=" ")
             fh.write(bytes(__dictionary_to_string("FoamFile", header), encoding))
             fh.write(bytes(f"\n\n{data.shape[0]}\n(", encoding))
-            (
-                fh.write(data.flatten().byteswap().tobytes())
-                if swap
-                else fh.write(data.flatten().tobytes())
-            )
+            (fh.write(data.flatten().byteswap().tobytes()) if swap else fh.write(data.flatten().tobytes()))
             fh.write(b")")
     elif header["format"] == "ascii":
         format = "(" + " ".join(data.shape[1] * [format]) + ")"
@@ -571,8 +541,7 @@ def read_scalar_field(filename: str, dtype: DTypeLike, byteorder="little", verbo
     if header["format"] == "binary":
         if byteorder not in ["big", "little"]:
             raise ValueError(
-                f'Invalid value "{byteorder}" for "byteorder", valid options are "little"'
-                ' (default), and "big"'
+                f'Invalid value "{byteorder}" for "byteorder", valid options are "little" (default), and "big"'
             )
         # Ensure the given dtype has the specified byteorder
         byteorder = "<" if byteorder == "little" else ">"
@@ -639,15 +608,12 @@ def write_scalar_field(
         tic = time.perf_counter()
 
     if data.ndim != 1:
-        raise ValueError(
-            f"Input array should be one dimensional, but it has {data.ndim} dimensions"
-        )
+        raise ValueError(f"Input array should be one dimensional, but it has {data.ndim} dimensions")
 
     if header["format"] == "binary":
         if byteorder not in ["big", "little"]:
             raise ValueError(
-                f'Invalid value "{byteorder}" for "byteorder", valid options are "little"'
-                ' (default), and "big"'
+                f'Invalid value "{byteorder}" for "byteorder", valid options are "little" (default), and "big"'
             )
         # Ensure the given dtype has the specified byteorder
         current = data.dtype.byteorder
@@ -828,10 +794,7 @@ def recursive_dictionary_parser(filename: str, **kwargs) -> Union[dict, int]:
                 # Single value
                 if len(v) == 1:
                     if verbose > 2:
-                        print(
-                            f'    ({depth}) reading key and single-valued value pair, k="{k}",'
-                            f" v={v}"
-                        )
+                        print(f'    ({depth}) reading key and single-valued value pair, k="{k}", v={v}')
                     # Try to cast into relevant form
                     for fun in [int, float, str]:
                         try:
@@ -843,10 +806,7 @@ def recursive_dictionary_parser(filename: str, **kwargs) -> Union[dict, int]:
                             pass
                 # Multiple values
                 else:
-                    mv = [
-                        word
-                        for word in __protected_split(" ".join(words[1:]), protected=("[", "]"))
-                    ]
+                    mv = [word for word in __protected_split(" ".join(words[1:]), protected=("[", "]"))]
                     container[k] = mv
                     # raise NotImplementedError(
                     #     "Reading key value pairs with multiple values is not implemented"
@@ -864,20 +824,15 @@ def recursive_dictionary_parser(filename: str, **kwargs) -> Union[dict, int]:
                 if line == ")":
                     if verbose > 1:
                         print(f"!!! ({depth}) break: end of list without semicolon")
-                    if cursor != len(
-                        lines
-                    ):  # not len(lines) - 1 because we have already incremented the cursor
-                        raise ValueError(
-                            "Ending a list without a semicolon is only possible at end-of-file"
-                        )
+                    if cursor != len(lines):  # not len(lines) - 1 because we have already incremented the cursor
+                        raise ValueError("Ending a list without a semicolon is only possible at end-of-file")
                     container.info.__setitem__("end", ")")
                     break
                 # Start of an unnamed dictionary
                 if line == "{":
                     if verbose > 2:
                         print(
-                            f"+++ ({depth}) starting recursive call to read unnamed dictionary,"
-                            f" using parent={parent}"
+                            f"+++ ({depth}) starting recursive call to read unnamed dictionary, using parent={parent}"
                         )
                     container[len(container)] = OrderedDict()
                     container[len(container) - 1].info = {}
@@ -899,10 +854,7 @@ def recursive_dictionary_parser(filename: str, **kwargs) -> Union[dict, int]:
                         )
                     continue
                 if line == "(":
-                    raise RuntimeError(
-                        'Read a line containing only "(", this line should have already been'
-                        " skipped!"
-                    )
+                    raise RuntimeError('Read a line containing only "(", this line should have already been skipped!')
                 # Start of an unnamed list
                 if line.isnumeric():
                     if next_line == "(":
@@ -934,15 +886,10 @@ def recursive_dictionary_parser(filename: str, **kwargs) -> Union[dict, int]:
                             )
                         # Check element count
                         if len(container[parent]) != item_count:
-                            raise ValueError(
-                                f"Expected {item_count} items in list, found"
-                                f" {len(container[parent])}"
-                            )
+                            raise ValueError(f"Expected {item_count} items in list, found {len(container[parent])}")
                         continue
                     else:
-                        raise ValueError(
-                            f'Expected start of list "(" after an integer line, found {line}'
-                        )
+                        raise ValueError(f'Expected start of list "(" after an integer line, found {line}')
                 # Start of a named container
                 else:
                     if any(char.isalpha() for char in line):
@@ -1004,14 +951,10 @@ def recursive_dictionary_parser(filename: str, **kwargs) -> Union[dict, int]:
                             continue
                         # List with class name identifier
                         elif next_line.startswith("List"):
-                            raise NotImplementedError(
-                                "Lists with class name identifier is not implemented"
-                            )
+                            raise NotImplementedError("Lists with class name identifier is not implemented")
                         # Named list with specified number of entries
                         elif next_line.isnumeric():
-                            raise NotImplementedError(
-                                "Named list with specified number of entires is not implemented"
-                            )
+                            raise NotImplementedError("Named list with specified number of entires is not implemented")
                         # A single-word list entry
                         else:
                             if "list" not in container["__type__"]:
@@ -1021,21 +964,14 @@ def recursive_dictionary_parser(filename: str, **kwargs) -> Union[dict, int]:
                                 try:
                                     container[fun(words[0])] = None
                                     if verbose > 3:
-                                        print(
-                                            f'    ({depth}) casted value "{words[0]}" to {str(fun)}'
-                                        )
+                                        print(f'    ({depth}) casted value "{words[0]}" to {str(fun)}')
                                     break
                                 except ValueError:
                                     pass
                     else:
-                        raise RuntimeError(
-                            "Unhandled case: line is not an integer and does not contain any"
-                            " letters"
-                        )
+                        raise RuntimeError("Unhandled case: line is not an integer and does not contain any letters")
             else:
-                raise RuntimeError(
-                    "Unhandled case: multiple space-seperated content without semicolon ending"
-                )
+                raise RuntimeError("Unhandled case: multiple space-seperated content without semicolon ending")
 
     if verbose > 2:
         if user_call:
