@@ -91,7 +91,7 @@ def build_cell_point_list(
     return cell_point_indices, cell_point_list
 
 
-@nb.jit(nopython=True, fastmath=True, parallel=True, boundscheck=False)
+@nb.jit(nopython=True, fastmath=True, boundscheck=False)
 def _build_cell_face_list_jit(face_owner: NDArray, face_neighbour: NDArray) -> Tuple[NDArray, NDArray]:
 
     # Infer the dtype for labels
@@ -106,12 +106,12 @@ def _build_cell_face_list_jit(face_owner: NDArray, face_neighbour: NDArray) -> T
     cell_face_indices = np.zeros(n_cells + 1, dtype=dtype)
 
     # Figure out maximum number of faces in a cell for the whole grid
-    for k in nb.prange(n_internal_faces):
+    for k in range(n_internal_faces):
 
         cell_face_indices[face_owner[k]] += 1
         cell_face_indices[face_neighbour[k]] += 1
 
-    for k in nb.prange(n_internal_faces, n_faces):
+    for k in range(n_internal_faces, n_faces):
 
         cell_face_indices[face_owner[k]] += 1
 
@@ -122,7 +122,7 @@ def _build_cell_face_list_jit(face_owner: NDArray, face_neighbour: NDArray) -> T
     # Now create a large array where we can hold all cell faces
     cell_faces = np.full((n_cells, max_faces_per_cell), -1, dtype=dtype)
 
-    for k in nb.prange(n_internal_faces):
+    for k in range(n_internal_faces):
 
         n = face_owner[k]
         cell_faces[n, cell_face_indices[n + 1]] = k  # Face count for cell "n" is stored at index "n+1"
@@ -132,7 +132,7 @@ def _build_cell_face_list_jit(face_owner: NDArray, face_neighbour: NDArray) -> T
         cell_faces[n, cell_face_indices[n + 1]] = k
         cell_face_indices[n + 1] += 1
 
-    for k in nb.prange(n_internal_faces, n_faces):
+    for k in range(n_internal_faces, n_faces):
 
         n = face_owner[k]
         cell_faces[n, cell_face_indices[n + 1]] = k
@@ -212,6 +212,9 @@ def _build_cell_point_list_jit(
 
         # Increment the total counter
         total_count += n_cell_points
+
+    # Remove the unused part of the cell point list
+    cell_point_list = cell_point_list[:total_count]
 
     cell_point_indices = np.cumsum(cell_point_indices)
 
