@@ -72,9 +72,7 @@ class PolyMesh:
     def dtype_float(self, value: DTypeLike) -> None:
 
         if np.dtype(value).itemsize < self.dtype_float.itemsize:
-            warnings.warn(
-                f"Switched to a dtype of lower precision ({str(self.dtype_float)} to {str(value)})"
-            )
+            warnings.warn(f"Switched to a dtype of lower precision ({str(self.dtype_float)} to {str(value)})")
 
         self.__dtype_float = np.dtype(value)
 
@@ -87,9 +85,7 @@ class PolyMesh:
     def dtype_int(self, value: DTypeLike) -> None:
 
         if np.dtype(value).itemsize < self.dtype_int.itemsize:
-            warnings.warn(
-                f"Switched to a dtype of lower precision ({str(self.dtype_int)} to {str(value)})"
-            )
+            warnings.warn(f"Switched to a dtype of lower precision ({str(self.dtype_int)} to {str(value)})")
 
         self.__dtype_int = np.dtype(value)
 
@@ -360,9 +356,7 @@ class PolyMesh:
             print("<<< PolyMesh.align_nodes\n")
 
         # mapping array has shape (pair idx, point idx in source/target)
-        return pair_distance, (
-            (np.vstack((idx_source, idx_target[pair_index])).T) if return_pairs else None
-        )
+        return pair_distance, ((np.vstack((idx_source, idx_target[pair_index])).T) if return_pairs else None)
 
     # TODO: Documentation
     def boundary_add_face(
@@ -392,9 +386,7 @@ class PolyMesh:
 
         # Ensure faces is an iterable sequence
         _faces = np.atleast_1d(_faces)
-        _faces = _faces[
-            np.argsort(_faces)[::-1]
-        ]  # decreasing order of deleting produces no offsets
+        _faces = _faces[np.argsort(_faces)[::-1]]  # decreasing order of deleting produces no offsets
 
         # Store the face definitions and owners before deleting them
         definitions = self.face_points(_faces)
@@ -515,10 +507,7 @@ class PolyMesh:
         self.__boundary[name].info = {"end": "}", "type": "named_dict"}
 
         if verbose > 0:
-            print(
-                f'Created empty boundary "{name}" starting from face'
-                f' {self.boundary[name]["startFace"]}'
-            )
+            print(f'Created empty boundary "{name}" starting from face {self.boundary[name]["startFace"]}')
 
     def boundary_delete_empty(self, verbose=1) -> None:
         """Removes empty boundaries (those with zero faces) from the boundary dictionary."""
@@ -551,13 +540,7 @@ class PolyMesh:
         if isinstance(cell, (collections.abc.Sequence, np.ndarray)):
             [self.cell_near_boundary(_cell) for _cell in cell]
         else:
-            return len(
-                set(
-                    boundary
-                    for boundary in self.face_boundary(self.cell_faces(cell))
-                    if boundary is not None
-                )
-            )
+            return len(set(boundary for boundary in self.face_boundary(self.cell_faces(cell)) if boundary is not None))
 
     def cell_current_index(self, cell: Union[int, ArrayLike]) -> Union[int, NDArray]:
         """Returns the current index of a given cell or sequence of cells.
@@ -574,9 +557,7 @@ class PolyMesh:
         """
 
         if isinstance(cell, (collections.abc.Sequence, np.ndarray)):
-            return np.array(
-                [self.cell_current_index(_cell) for _cell in cell], dtype=self.dtype_int
-            )
+            return np.array([self.cell_current_index(_cell) for _cell in cell], dtype=self.dtype_int)
         else:
             if cell in self.__deleted_cells:
                 raise Exception(f"Attempted to refer to a deleted cell with index {cell}")
@@ -597,13 +578,9 @@ class PolyMesh:
         """
 
         if isinstance(cell, (collections.abc.Sequence, np.ndarray)):
-            return np.array(
-                [self.cell_original_index(_cell) for _cell in cell], dtype=self.dtype_int
-            )
+            return np.array([self.cell_original_index(_cell) for _cell in cell], dtype=self.dtype_int)
         else:
-            return np.argmax(
-                np.arange(self.__cell_offset_log.size) + self.__cell_offset_log == cell
-            )
+            return np.argmax(np.arange(self.__cell_offset_log.size) + self.__cell_offset_log == cell)
 
     def cell_faces(self, cell: Union[int, ArrayLike]) -> Union[NDArray, List[NDArray]]:
         """Returns the indices of faces forming a given cell or a sequence of cells.
@@ -622,9 +599,7 @@ class PolyMesh:
         if isinstance(cell, (collections.abc.Sequence, np.ndarray)):
             return [self.cell_faces(_cell) for _cell in cell]
         else:
-            return np.union1d(
-                np.where(self.face_owner == cell), np.where(self.face_neighbour == cell)
-            )
+            return np.union1d(np.where(self.face_owner == cell), np.where(self.face_neighbour == cell))
 
         # return (
         #     [
@@ -721,9 +696,7 @@ class PolyMesh:
         else:
             return np.linalg.norm(self.points[edge[..., 1]] - self.points[edge[..., 0]], axis=-1)
 
-    def face_mean_edge_length(
-        self, face: Union[int, ArrayLike]
-    ) -> Union[float, NDArray, List[NDArray]]:
+    def face_mean_edge_length(self, face: Union[int, ArrayLike]) -> Union[float, NDArray, List[NDArray]]:
         """Returns the average edge length for a given face or sequence of faces.
 
         Parameters
@@ -738,9 +711,7 @@ class PolyMesh:
         """
 
         if isinstance(face, (collections.abc.Sequence, np.ndarray)):
-            return np.array(
-                [self.face_mean_edge_length(_face) for _face in face], dtype=self.dtype_float
-            )
+            return np.array([self.face_mean_edge_length(_face) for _face in face], dtype=self.dtype_float)
         else:
             return np.mean(self.edge_length(self.face_edges(face)))
 
@@ -766,9 +737,7 @@ class PolyMesh:
                     return k
             return None
 
-    def face_cells(
-        self, face: Union[int, ArrayLike]
-    ) -> Union[int, List[int], NDArray, List[NDArray]]:
+    def face_cells(self, face: Union[int, ArrayLike]) -> Union[int, List[int], NDArray, List[NDArray]]:
         """Returns the index of cells adjacent to the given face.
 
         Parameters
@@ -806,9 +775,7 @@ class PolyMesh:
         """
 
         if isinstance(face, (collections.abc.Sequence, np.ndarray)):
-            return np.array(
-                [self.face_current_index(_face) for _face in face], dtype=self.dtype_int
-            )
+            return np.array([self.face_current_index(_face) for _face in face], dtype=self.dtype_int)
         else:
             if face in self.__deleted_faces:
                 raise Exception(f"Attempted to refer to a deleted face with index {face}")
@@ -829,13 +796,9 @@ class PolyMesh:
         """
 
         if isinstance(face, (collections.abc.Sequence, np.ndarray)):
-            return np.array(
-                [self.face_original_index(_face) for _face in face], dtype=self.dtype_int
-            )
+            return np.array([self.face_original_index(_face) for _face in face], dtype=self.dtype_int)
         else:
-            return np.argmax(
-                np.arange(self.__face_offset_log.size) + self.__face_offset_log == face
-            )
+            return np.argmax(np.arange(self.__face_offset_log.size) + self.__face_offset_log == face)
 
     def face_edges(self, face: Union[int, ArrayLike]) -> Union[NDArray, List[NDArray]]:
         """Returns the ordered sequence of edges forming a face.
@@ -886,9 +849,7 @@ class PolyMesh:
         if isinstance(face, (collections.abc.Sequence, np.ndarray)):
             return [self.face_points(_face) for _face in face]
         else:
-            return self.__face_point_list[
-                self.__face_point_indices[face] : self.__face_point_indices[face + 1]
-            ]
+            return self.__face_point_list[self.__face_point_indices[face] : self.__face_point_indices[face + 1]]
 
     def faces_internal(self) -> NDArray:
         """Returns the indices of internal faces.
@@ -1038,9 +999,7 @@ class PolyMesh:
         """
 
         if isinstance(point, (collections.abc.Sequence, np.ndarray)):
-            return np.array(
-                [self.point_current_index(_point) for _point in point], dtype=self.dtype_int
-            )
+            return np.array([self.point_current_index(_point) for _point in point], dtype=self.dtype_int)
         else:
             if point in self.__deleted_points:
                 raise Exception(f"Attempted to refer to a deleted face with index {point}")
@@ -1061,13 +1020,9 @@ class PolyMesh:
         """
 
         if isinstance(point, (collections.abc.Sequence, np.ndarray)):
-            return np.array(
-                [self.point_original_index(_point) for _point in point], dtype=self.dtype_int
-            )
+            return np.array([self.point_original_index(_point) for _point in point], dtype=self.dtype_int)
         else:
-            return np.argmax(
-                np.arange(self.__point_offset_log.size) + self.__point_offset_log == point
-            )
+            return np.argmax(np.arange(self.__point_offset_log.size) + self.__point_offset_log == point)
 
     def point_faces(self, point: Union[int, ArrayLike]) -> Union[NDArray, List[NDArray]]:
         """Returns the faces that contains the given point in their definition.
@@ -1158,14 +1113,9 @@ class PolyMesh:
 
         for k, v in kwargs.items():
             if k not in settings:
-                raise ValueError(
-                    f'"{k}" is not a valid keyword argument, valid options are'
-                    f" {list(settings.keys())}"
-                )
+                raise ValueError(f'"{k}" is not a valid keyword argument, valid options are {list(settings.keys())}')
             if type(k) is not type(settings[k]):
-                raise TypeError(
-                    f'Incorrect type for "{k}", expected {type(settings[k])} found {type(k)}'
-                )
+                raise TypeError(f'Incorrect type for "{k}", expected {type(settings[k])} found {type(k)}')
             settings[k] = v
 
         _path = Path(path)
@@ -1289,35 +1239,35 @@ class PolyMesh:
 
         # Points
         self.__points = read_vector_field(
-            os.path.join(path, "points"),
+            os.path.join(path, "constant", "polyMesh", "points"),
             dtype=self.dtype_float,
             byteorder=self.__byteorder,
             verbose=self.verbose,
         )
         # Face definitions
         self.__face_point_indices, self.__face_point_list = read_faces(
-            os.path.join(path, "faces"),
+            os.path.join(path, "constant", "polyMesh", "faces"),
             dtype=self.dtype_int,
             byteorder=self.__byteorder,
             verbose=self.verbose,
         )
         # Face owner list
         self.__face_owner = read_scalar_field(
-            os.path.join(path, "owner"),
+            os.path.join(path, "constant", "polyMesh", "owner"),
             dtype=self.dtype_int,
             byteorder=self.__byteorder,
             verbose=self.verbose,
         )
         # Face neighbour list
         self.__face_neighbour = read_scalar_field(
-            os.path.join(path, "neighbour"),
+            os.path.join(path, "constant", "polyMesh", "neighbour"),
             dtype=self.dtype_int,
             byteorder=self.__byteorder,
             verbose=self.verbose,
         )
         # Bounary dictionary
         self.__boundary = recursive_dictionary_parser(
-            os.path.join(path, "boundary"), verbose=self.verbose
+            os.path.join(path, "constant", "polyMesh", "boundary"), verbose=self.verbose
         )["boundary"]
 
     @staticmethod
@@ -1441,9 +1391,7 @@ class PolyMesh:
         face = self.cells_shared_face(_cells)
 
         if face is None:
-            raise ValueError(
-                f"Given cells {_cells}({self.cell_original_index(_cells)}) are not neighbours"
-            )
+            raise ValueError(f"Given cells {_cells}({self.cell_original_index(_cells)}) are not neighbours")
 
         # Arbitrarily select the smaller cell index to keep
         merged_cell = min(_cells)
@@ -1573,33 +1521,25 @@ class PolyMesh:
         indices = np.where(self.__face_owner == deleted_cell)
         self.__face_owner[indices] = merged_cell
         if verbose > 1:
-            print(
-                f"Updated {len(indices)} reference(s) to cell {deleted_cell} in the owner cell list"
-            )
+            print(f"Updated {len(indices)} reference(s) to cell {deleted_cell} in the owner cell list")
 
         indices = np.where(self.__face_neighbour == deleted_cell)
         self.__face_neighbour[indices] = merged_cell
         if verbose > 1:
-            print(
-                f"Updated {len(indices)} reference(s) to cell {deleted_cell} in the neighbour cell"
-                " list"
-            )
+            print(f"Updated {len(indices)} reference(s) to cell {deleted_cell} in the neighbour cell list")
 
         # Remove all information coresponding to the index of this face
         self.__face_point_list = np.delete(
             self.__face_point_list,
             np.arange(self.__face_point_indices[face], self.__face_point_indices[face + 1]),
         )
-        self.__face_point_indices = np.insert(
-            np.cumsum(np.delete(np.diff(self.__face_point_indices), face)), 0, 0
-        )
+        self.__face_point_indices = np.insert(np.cumsum(np.delete(np.diff(self.__face_point_indices), face)), 0, 0)
         self.__face_owner = np.delete(self.__face_owner, face)
         self.__face_neighbour = np.delete(self.__face_neighbour, face)
 
         if verbose > 1:
             print(
-                f"Removed face {face} from face owner/neighbour lists, updated face point list and"
-                " face point indices"
+                f"Removed face {face} from face owner/neighbour lists, updated face point list and face point indices"
             )
 
         # Start face of all boundaries should offset one face
@@ -1638,8 +1578,7 @@ class PolyMesh:
 
         if verbose > 0:
             print(
-                f"Replacing definition of face {_face}({self.face_original_index(_face)}) with"
-                f" {points} ...",
+                f"Replacing definition of face {_face}({self.face_original_index(_face)}) with {points} ...",
                 end=" ",
             )
 
@@ -1685,9 +1624,7 @@ class PolyMesh:
         indices = np.where(self.__face_neighbour == cell_old)
         self.__face_neighbour[indices] = cell_new
         if verbose > 1:
-            print(
-                f"Updated {len(indices)} reference(s) to cell {cell_old} in the neighbour cell list"
-            )
+            print(f"Updated {len(indices)} reference(s) to cell {cell_old} in the neighbour cell list")
         # Update cell indices
         self.__face_owner[self.__face_owner > cell_old] -= 1
         self.__face_neighbour[self.__face_neighbour > cell_old] -= 1
@@ -1778,15 +1715,11 @@ class PolyMesh:
         # Check if faces are sharing an edge
         shared_points = self.faces_shared_points(_faces)
         if len(shared_points) == 0:
-            raise Exception(
-                f"Faces {_faces}({self.face_original_index(_faces)}) do not have a shared edge"
-            )
+            raise Exception(f"Faces {_faces}({self.face_original_index(_faces)}) do not have a shared edge")
 
         # Check if both faces are pointing to same cells
         faces_cells = self.face_cells(_faces)
-        if set(np.atleast_1d(faces_cells[0]).tolist()) != set(
-            np.atleast_1d(faces_cells[1]).tolist()
-        ):
+        if set(np.atleast_1d(faces_cells[0]).tolist()) != set(np.atleast_1d(faces_cells[1]).tolist()):
             raise Exception(
                 f"Faces {_faces}({self.face_original_index(_faces)}) are not associated with the"
                 f" same cells ({faces_cells})"
@@ -1794,9 +1727,7 @@ class PolyMesh:
 
         # Check if this is a valid topology
         if len(shared_points) != 2:
-            raise RuntimeError(
-                f"Faces {_faces}({self.face_original_index(_faces)}) have more than 2 shared points"
-            )
+            raise RuntimeError(f"Faces {_faces}({self.face_original_index(_faces)}) have more than 2 shared points")
 
         # Check if it makes sense to merge these faces
         if np.all(self.face_is_internal(_faces)):
@@ -1850,9 +1781,7 @@ class PolyMesh:
 
         # Delete the marked point
         if points_to_delete:
-            self._del_point(
-                points_to_delete[0], replace_faces=True, indexing="current", verbose=verbose
-            )
+            self._del_point(points_to_delete[0], replace_faces=True, indexing="current", verbose=verbose)
 
         if verbose > 0:
             print("Done.")
@@ -1904,10 +1833,7 @@ class PolyMesh:
         # Two cases to be handled differently: we insert face to the end of face list or else
         if boundary == self.boundary_by_id(-1):
             if verbose > 0:
-                print(
-                    f'Adding face with definition {points} to boundary "{boundary}" at the end of'
-                    " face list"
-                )
+                print(f'Adding face with definition {points} to boundary "{boundary}" at the end of face list')
             # Append the face definition in face point list
             self.__face_point_list = np.append(self.__face_point_list, points)
             # Append point count into the face index list
@@ -1922,14 +1848,9 @@ class PolyMesh:
             # Insert to the last position in the given boundary
             index = np.max(self.boundary_faces(boundary))
             if verbose > 0:
-                print(
-                    f'Adding face with definition {points} to boundary "{boundary}" with face index'
-                    f" {index}"
-                )
+                print(f'Adding face with definition {points} to boundary "{boundary}" with face index {index}')
             # Insert the face definition in face point list
-            self.__face_point_list = np.insert(
-                self.__face_point_list, self.__face_point_indices[index], points
-            )
+            self.__face_point_list = np.insert(self.__face_point_list, self.__face_point_indices[index], points)
             # Insert point count into the face index list and increment affected cumulative counts
             self.__face_point_indices = np.insert(
                 self.__face_point_indices, index + 1, self.__face_point_indices[index] + len(points)
@@ -1984,15 +1905,11 @@ class PolyMesh:
         # Compute the shared points between given faces
         common_points = self.faces_shared_points(_faces).tolist()
         if len(common_points) != 2:
-            raise Exception(
-                f"Given faces {_faces} have {len(common_points)} shared points (required 2)"
-            )
+            raise Exception(f"Given faces {_faces} have {len(common_points)} shared points (required 2)")
         # Verify points to delete are contained within the common points
         for point in points_to_delete:
             if point not in common_points:
-                raise Exception(
-                    f"Given point to delete {point} is not a shared point between faces {_faces}"
-                )
+                raise Exception(f"Given point to delete {point} is not a shared point between faces {_faces}")
         if verbose > 1:
             print(f"Common points between faces {_faces} are {common_points}")
         # Label given faces arbitrarily and choose the last common point in "face 1" as anchor
