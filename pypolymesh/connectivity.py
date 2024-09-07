@@ -412,7 +412,7 @@ def __build_ordered_cell_point_list_jit(
                 n_polys += 1
 
         # Tetrahedron
-        if n_quads == 0 and n_tris == 4:
+        if n_quads == 0 and n_tris == 4 and n_polys == 0:
             cell_type = TETRAHEDRON
             # Pick any face as the base
             tri_1 = face_point_list[face_point_indices[idx_tris[0]] : face_point_indices[idx_tris[0] + 1]]
@@ -483,7 +483,7 @@ def __build_ordered_cell_point_list_jit(
             total_count += 6
 
         # Hexahedron
-        elif n_quads == 6 and n_polys == 0:
+        elif n_quads == 6 and n_tris == 0 and n_polys == 0:
             cell_type = HEXAHEDRON
             # Pick any face as base
             quad_1 = face_point_list[face_point_indices[cell_faces[0]] : face_point_indices[cell_faces[0] + 1]]
