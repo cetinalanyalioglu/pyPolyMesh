@@ -10,7 +10,33 @@ POINTS_PER_CELL = 9  # Has no restrictive effect, only used to estimate initial 
 
 
 def build_cell_face_list(face_owner: NDArray, face_neighbour: NDArray, verbose=1) -> Tuple[NDArray, NDArray]:
-    """Assembles the compact cell-face list.
+    """Computes the compact cell-face list.
+
+    The compact cell-face list contains all information regarding the faces of each cell in the grid.
+    It is formed by 2 arrays: the cell face index pointer array and the cell face index list array.
+    The cell face index list array is a one dimensional array which contains the face indices of each cell,
+    ordered from cell index 0 to the highest cell index. The cell face index pointer array is also a one
+    dimensional array, but it contains the starting index in the cell face list array for each cell.
+
+    >>> # Consider a grid formed by 2 tetrahedrons,
+    >>> face_owner = np.array([0, 0, 0, 0, 1, 1, 1])
+    >>> face_neighbour = np.array([1, -1, -1, -1, -1, -1, -1])
+    >>> # Compute the cell-face list
+    >>> cell_face_indices, cell_face_list = build_cell_face_list(face_owner, face_neighbour, verbose=0)
+    >>> cell_face_indices
+    (array([0, 4, 8])
+    >>> cell_face_list
+    array([0, 1, 2, 3, 0, 4, 5, 6])
+    >>> # Retrieve the indices of cell 0
+    >>> cell_face_list[cell_face_indices[0]:cell_face_indices[1]]
+    array([0, 1, 2, 3])
+    >>> # Retrieve the indices of cell 1
+    >>> cell_face_list[cell_face_indices[1]:cell_face_indices[2]]
+    array([0, 4, 5, 6])
+
+    Notes
+    -----
+    The ordering of faces within a cell definition is arbitrary.
 
     Parameters
     ----------
@@ -24,12 +50,12 @@ def build_cell_face_list(face_owner: NDArray, face_neighbour: NDArray, verbose=1
     Returns
     -------
     Tuple[NDArray, NDArray]
-        2-tuple consisting of cell face index pointer array and the cell face index list arrays
-
-    Notes
-    -----
-    The ordering of faces within a cell definition is arbitrary.
+        2-tuple consisting of cell face index pointer array and the cell face index list arrays. The dtype of returned
+        arrays is inferred from the input arrays.
     """
+
+    if face_owner.dtype != face_neighbour.dtype:
+        raise ValueError("Face owner and neighbour arrays must have the same dtype.")
 
     if verbose > 0:
         tic = time.perf_counter()
@@ -219,3 +245,204 @@ def _build_cell_point_list_jit(
     cell_point_indices = np.cumsum(cell_point_indices)
 
     return cell_point_indices, cell_point_list
+
+
+@nb.jit(nopython=True, fastmath=True, boundscheck=False)
+def _build_ordered_cell_point_list_jit(
+    points: NDArray,
+    face_point_indices: NDArray,
+    face_point_list: NDArray,
+    face_centroids: NDArray,
+    face_area_vectors: NDArray,
+    cell_face_indices: NDArray,
+    cell_face_list: NDArray,
+) -> Tuple[NDArray, NDArray]:
+
+    # Infer dtype from input (ensure the input arrays have uniform dtypes before calling)
+    dtype = face_point_indices.dtype
+
+    # Initialize counter for unique points referred by cells
+    total_count = 0
+
+    # Evaluate number of cells
+    n_cells = cell_face_indices.size - 1
+
+    # Allocate index pointer array
+    cell_point_indices = np.empty(n_cells + 1, dtype=dtype)
+    cell_point_indices[0] = 0
+
+    # Allocate cell type array
+    cell_types = np.empty(n_cells, dtype=dtype)
+
+    # Start by assuming "POINTS_PER_CELL" unique points per cell is enough to represent all cells in this grid
+    cell_point_list = np.full(POINTS_PER_CELL * n_cells, -1, dtype=dtype)
+
+    # Loop over all cells
+    for cell_idx in range(n_cells):
+
+        # Check size and reallocate if necessary
+        if total_count + MAX_POINTS_PER_CELL > cell_point_list.size:
+            cell_point_list = np.concatenate((cell_point_list, np.full(n_cells, -1, dtype=dtype)))
+
+        # Get indices of faces of this cell
+        cell_faces = cell_face_list[cell_face_indices[cell_idx] : cell_face_indices[cell_idx + 1]]
+
+        n_quads = 0  # Number of quadrilaterals
+        n_tris = 0  # Number of triangles
+        n_polys = 0  # Number of polygons
+
+        idx_quad = -1  # Index of an arbitrary quadrilateral face in this cell
+        idx_tris = np.full(2, 1, dtype=dtype)  # Indices of two triangles in this cell
+
+        # First count the face types for this cell
+        for k in range(cell_faces.size):
+
+            # Get face index
+            face_idx = cell_faces[k]
+
+            # Get point indices for this face
+            face_points = face_point_list[face_point_indices[face_idx] : face_point_indices[face_idx + 1]]
+
+            # Determine the type of face and accumulate the counts of each face type
+            if face_points.size == 3:
+                # We need to save index of only 2 triangle faces
+                idx_tris[min(n_tris, 1)] = face_idx
+                n_tris += 1
+            elif face_points.size == 4:
+                # We need to save index of only one quadrilateral face
+                idx_quad = face_idx
+                n_quads += 1
+            else:
+                n_polys += 1
+
+        # Tetrahedron
+        if n_quads == 0 and n_tris == 4:
+            cell_type = TETRAHEDRON
+            # Pick any face as the base
+            tri_1 = face_point_list[face_point_indices[idx_tris[0]] : face_point_indices[idx_tris[0] + 1]]
+            # Find the tip point, which is not in the base
+            tri_2 = face_point_list[face_point_indices[idx_tris[1]] : face_point_indices[idx_tris[1] + 1]]
+            for point in tri_2:
+                if point not in tri_1:
+                    tip = point
+                    break
+            # The correct orientation is such that normal vector of the base points towards interior
+            v1 = points[tip] - face_centroids[idx_tris[0], :]  # Vector from base centroid to tip point
+            v2 = face_area_vectors[idx_tris[0], :]
+            if np.dot(v1, v2) < 0:
+                tri_1 = tri_1[::-1]
+            # Append to the cell point list
+            cell_point_list[total_count : total_count + 3] = tri_1
+            cell_point_list[total_count + 3] = tip
+            # Fill the index pointer array
+            cell_point_indices[cell_idx + 1] = 4
+            # Increment the total counter
+            total_count += 4
+
+        # Pyramid
+        elif n_quads == 1 and n_tris == 4 and n_polys == 0:
+            cell_type = PYRAMID
+            # The quadrilateral face is the base of the pyramid
+            quad = face_point_list[face_point_indices[idx_quad] : face_point_indices[idx_quad + 1]]
+            # Find the tip point, which is not in the base
+            for point in face_point_list[face_point_indices[idx_tris[0]] : face_point_indices[idx_tris[0] + 1]]:
+                if point not in quad:
+                    tip = point
+                    break
+            # The correct orientation is such that normal vector of the base points towards interior
+            v1 = points[tip] - face_centroids[idx_quad, :]  # Vector from base centroid to tip point
+            v2 = face_area_vectors[idx_quad, :]
+            if np.dot(v1, v2) < 0:
+                quad = quad[::-1]
+            # Append to the cell point list
+            cell_point_list[total_count : total_count + 4] = quad
+            cell_point_list[total_count + 4] = tip
+            # Fill the index pointer array
+            cell_point_indices[cell_idx + 1] = 5
+            # Increment the total counter
+            total_count += 5
+
+        # Pentahedron, also referred as wedge or triangular prism
+        elif n_quads == 3 and n_tris == 2 and n_polys == 0:
+            cell_type = PENTAHEDRON
+            # Pick one of the triangular faces as the base
+            tri_1 = face_point_list[face_point_indices[idx_tris[0]] : face_point_indices[idx_tris[0] + 1]]
+            # Pick the other triangular face as the top
+            tri_2 = face_point_list[face_point_indices[idx_tris[1]] : face_point_indices[idx_tris[1] + 1]]
+            # The normal vector of the first triangle should point towards the interior of the cell
+            v1 = face_centroids[idx_tris[1], :] - face_centroids[idx_tris[0], :]  # Base to top
+            v2 = face_area_vectors[idx_tris[0], :]
+            if np.dot(v1, v2) < 0:
+                tri_1 = tri_1[::-1]
+            # The normal vectors of both triangles should point to the same direction
+            if np.dot(v2, face_area_vectors[idx_tris[1], :]) < 0:
+                # Reverse the order of the second triangle if the normal vectors point to opposite directions
+                tri_2 = tri_2[::-1]
+            # Append to the cell point list
+            cell_point_list[total_count : total_count + 3] = tri_1
+            cell_point_list[total_count + 3 : total_count + 6] = tri_2
+            # Fill the index pointer array
+            cell_point_indices[cell_idx + 1] = 6
+            # Increment the total counter
+            total_count += 6
+
+        # Hexahedron
+        elif n_quads == 6 and n_polys == 0:
+            cell_type = HEXAHEDRON
+            # Pick any face as base
+            quad_1 = face_point_list[face_point_indices[cell_faces[0]] : face_point_indices[cell_faces[0] + 1]]
+            # Find the top face (it should have no common points with the base)
+            for face_idx in cell_faces:
+                quad_2 = face_point_list[face_point_indices[face_idx] : face_point_indices[face_idx + 1]]
+                idx_quad_2 = face_idx
+                found_common_point = False
+                for point in quad_2:
+                    if point in quad_1:
+                        found_common_point = True
+                        break
+                if not found_common_point:
+                    break
+            # The normal vector of the base should point towards the interior of the cell
+            v1 = face_centroids[idx_quad_2, :] - face_centroids[cell_faces[0], :]
+            v2 = face_area_vectors[cell_faces[0], :]
+            if np.dot(v1, v2) < 0:
+                quad_1 = quad_1[::-1]
+            # The normal vectors of both the base andd top should point to the same direction
+            if np.dot(face_area_vectors[cell_faces[0], :], face_area_vectors[idx_quad_2, :]) < 0:
+                # Reverse the order of the top if the normal vectors point to opposite directions
+                quad_2 = quad_2[::-1]
+            # Append to the cell point list
+            cell_point_list[total_count : total_count + 4] = quad_1
+            cell_point_list[total_count + 4 : total_count + 8] = quad_2
+            # Fill the index pointer array
+            cell_point_indices[cell_idx + 1] = 8
+            # Increment the total counter
+            total_count += 8
+
+        # For all other cases, we categorize the cell as a polyhedron
+        else:
+            cell_type = POLYHEDRON
+            # In contrast to other element types, the point order does not matter here. We only need to store the
+            # indices of unique points forming this cell. Note that this is not same as the VTK polyhedron definition.
+            count = 0
+            for face_idx in cell_faces:
+                face_points = face_point_list[face_point_indices[face_idx] : face_point_indices[face_idx + 1]]
+                for point in face_points:
+                    if point not in cell_point_list[total_count : total_count + count]:
+                        cell_point_list[total_count + count] = point
+                        count += 1
+            # Fill the index pointer array
+            cell_point_indices[cell_idx + 1] = count
+            # Increment the total counter
+            total_count += count
+
+        # Assign the cell type for this cell
+        cell_types[cell_idx] = cell_type
+
+    # Remove the unused portion of the cell point list array
+    cell_point_list = cell_point_list[:total_count]
+
+    # Build the cell point index pointer array from cumulative sum of individual cell point counts
+    cell_point_indices = np.cumsum(cell_point_indices)
+
+    return cell_types, cell_point_indices, cell_point_list
