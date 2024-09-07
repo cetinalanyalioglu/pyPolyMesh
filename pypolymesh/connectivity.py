@@ -1,4 +1,5 @@
 from numpy.typing import NDArray
+from .elements import TETRAHEDRON, PYRAMID, PENTAHEDRON, HEXAHEDRON, POLYHEDRON
 from typing import Tuple
 
 import numba as nb
