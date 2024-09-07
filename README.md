@@ -30,10 +30,11 @@ This way the changes are going to be reflected without a need to reinstall the p
     cell_faces = mesh.cell_faces(1263)
 
     # The face -> point connectivity is automatically built during read.
-    # Extract the points of 124'th face
+    # Extract the ordered point sequence defining face 124
     face_points = mesh.face_point_list[mesh.face_point_indices[124] : mesh.face_point_indices[125]]
     # is identical to
     face_points = mesh.face_points(124)
+    # For a valid mesh the point sequence follows a counter-clockwise orientation.
 
     # Compute face areas and centroids (uses the exact same method in OpenFOAM)
     face_centroids, face_area_vectors = compute_face_areas_and_centroids(mesh.points, mesh.face_point_indices, 
