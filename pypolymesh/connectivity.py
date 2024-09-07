@@ -1,5 +1,9 @@
+from .elements import HEXAHEDRON
+from .elements import PENTAHEDRON
+from .elements import POLYHEDRON
+from .elements import PYRAMID
+from .elements import TETRAHEDRON
 from numpy.typing import NDArray
-from .elements import TETRAHEDRON, PYRAMID, PENTAHEDRON, HEXAHEDRON, POLYHEDRON
 from typing import Tuple
 
 import numba as nb
@@ -62,7 +66,7 @@ def build_cell_face_list(face_owner: NDArray, face_neighbour: NDArray, verbose=1
         tic = time.perf_counter()
         print("Building cell face list ...", end=" ")
 
-    cell_face_indices, cell_face_list = _build_cell_face_list_jit(face_owner, face_neighbour)
+    cell_face_indices, cell_face_list = __build_cell_face_list_jit(face_owner, face_neighbour)
 
     if verbose > 0:
         toc = time.perf_counter()
@@ -78,36 +82,45 @@ def build_cell_point_list(
     cell_face_list: NDArray,
     verbose=1,
 ) -> Tuple[NDArray, NDArray]:
-    """Assembles the compact cell-point list.
+    """Assembles the cell-point list.
+
+    The cell-point list contains the (unique) points referred by each cell in the grid. It is formed by 2 arrays: the
+    cell point index pointer array and the cell point list array. The cell point list array is a one dimensional array
+    which contains the point indices of each cell, ordered from cell index 0 to the highest cell index. The cell point
+    index pointer array is also a one dimensional array, but it contains the starting index in the cell point list array
+    for each cell.
+
+    Note that this routine does not care about the ordering of points within a cell, therefore for standard elements
+    (e.g. tetrahedron, hexahedron) the ordering of points won't match the VTK or other standard conventions.
 
     Parameters
     ----------
     face_point_indices : NDArray
-        Face point index pointer array
+        Face point index pointer array, shape (n_faces + 1)
     face_point_list : NDArray
-        Face point index list array
+        Face point index list array, shape (n_face_points)
     cell_face_indices : NDArray
-        Cell face index pointer array
+        Cell face index pointer array, shape (n_cells + 1)
     cell_face_list : NDArray
-        Cell face index list array
+        Cell face index list array, shape (n_cell_faces)
     verbose : int, optional
         Display information, by default 1
 
     Returns
     -------
     Tuple[NDArray, NDArray]
-        2-tuple consisting of cell point index pointer array and the cell face point list arrays
-
-    Note
-    ----
-    The ordering of points within a cell definition is arbitrary.
+        2-tuple consisting of cell point index pointer array and the cell point list arrays. The dtype of returned
+        arrays is inferred from the input arrays.
     """
+
+    if not all(arr.dtype == face_point_indices.dtype for arr in [face_point_list, cell_face_indices, cell_face_list]):
+        raise ValueError("All input arrays must have the same dtype.")
 
     if verbose > 0:
         tic = time.perf_counter()
         print("Building cell point list ...", end=" ")
 
-    cell_point_indices, cell_point_list = _build_cell_point_list_jit(
+    cell_point_indices, cell_point_list = __build_cell_point_list_jit(
         face_point_indices, face_point_list, cell_face_indices, cell_face_list
     )
 
@@ -118,8 +131,89 @@ def build_cell_point_list(
     return cell_point_indices, cell_point_list
 
 
+def build_ordered_cell_point_list(
+    points: NDArray,
+    face_point_indices: NDArray,
+    face_point_list: NDArray,
+    face_centroids: NDArray,
+    face_area_vectors: NDArray,
+    cell_face_indices: NDArray,
+    cell_face_list: NDArray,
+    verbose=1,
+) -> Tuple[NDArray, NDArray, NDArray]:
+    """Assembles the ordered cell-point list.
+
+    The output is similar to ```build_cell_point_list``` but the points are ordered in a specific way for each
+    non-polyhedral cell type following the VTK convention. With this type of definition, each non-polyhedral cell
+    is completely defined by its ordered set of points, e.g. face information is no longer necessary. For polyhedral
+    cells, the point list contains the unique points referred by the cell arranged in an arbitrary order.
+
+    The VTK polyhedron definition is
+    ``` [n_items, n_faces, n_face_0_points, face_0_point_1, face_0_point_2, ..., n_face_1_points, ...]```
+     where ```n_items``` refers to the length of above list (not including ```n_items```), and faces are expected
+     to have a counter-clowise orientation when viewed from outside the cell. This routine is intended to contain
+     only point indices in the output, and **does not** return the VTK definition for polyhedrons. Instead, each
+     polyhedral is represented as ```[point_1, point_2, point_3, ...]```, where the order of points is arbitrary.
+     These points are unique, e.g. the duplications due to sharing among faces are removed.
+
+    To use this routine,
+    1. The cell face list must be computed first using ```build_cell_face_list```.
+    2. The face centroids and area vectors should be computed using ```compute_face_centroids_and_area_vectors```.
+
+    Parameters
+    ----------
+    points : NDArray
+        Point coordinates array, shape (n_points, 3)
+    face_point_indices : NDArray
+        Face point index pointer array, shape (n_faces + 1)
+    face_point_list : NDArray
+        Face point index list array, shape (n_face_points)
+    face_centroids : NDArray
+        Face centroids array, shape (n_faces, 3)
+    face_area_vectors : NDArray
+        Face area vectors array, shape (n_faces, 3)
+    cell_face_indices : NDArray
+        Cell face index pointer array, shape (n_cells + 1)
+    cell_face_list : NDArray
+        Cell face index list array, shape (n_cell_faces)
+    verbose : int, optional
+        Display information, by default 1
+
+    Returns
+    -------
+    Tuple[NDArray, NDArray, NDArray]
+        3-tuple consisting of cell types, cell point index pointer array and the cell face point list arrays
+    """
+
+    if not all(arr.dtype == points.dtype for arr in [face_centroids, face_area_vectors]):
+        raise ValueError("Input arrays have non-uniform dtypes for floating point values.")
+
+    if not all(arr.dtype == face_point_indices.dtype for arr in [face_point_list, cell_face_indices, cell_face_list]):
+        raise ValueError("Input arrays have non-uniform dtypes for integers.")
+
+    if verbose > 0:
+        tic = time.perf_counter()
+        print("Building ordered cell point list ...", end=" ")
+
+    cell_types, cell_point_indices, cell_point_list = __build_ordered_cell_point_list_jit(
+        points,
+        face_point_indices,
+        face_point_list,
+        face_centroids,
+        face_area_vectors,
+        cell_face_indices,
+        cell_face_list,
+    )
+
+    if verbose > 0:
+        toc = time.perf_counter()
+        print(f"done in {toc - tic:0.4f} seconds.", flush=True)
+
+    return cell_types, cell_point_indices, cell_point_list
+
+
 @nb.jit(nopython=True, fastmath=True, boundscheck=False)
-def _build_cell_face_list_jit(face_owner: NDArray, face_neighbour: NDArray) -> Tuple[NDArray, NDArray]:
+def __build_cell_face_list_jit(face_owner: NDArray, face_neighbour: NDArray) -> Tuple[NDArray, NDArray]:
 
     # Infer the dtype for labels
     dtype = face_owner.dtype
@@ -175,7 +269,7 @@ def _build_cell_face_list_jit(face_owner: NDArray, face_neighbour: NDArray) -> T
 
 
 @nb.jit(nopython=True, fastmath=True, boundscheck=False)
-def _build_cell_point_list_jit(
+def __build_cell_point_list_jit(
     face_point_indices: NDArray,
     face_point_list: NDArray,
     cell_face_indices: NDArray,
@@ -248,8 +342,9 @@ def _build_cell_point_list_jit(
     return cell_point_indices, cell_point_list
 
 
+# Around 5 seconds for 18 million cells including jit compilation
 @nb.jit(nopython=True, fastmath=True, boundscheck=False)
-def _build_ordered_cell_point_list_jit(
+def __build_ordered_cell_point_list_jit(
     points: NDArray,
     face_point_indices: NDArray,
     face_point_list: NDArray,
