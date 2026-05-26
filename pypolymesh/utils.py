@@ -130,6 +130,46 @@ def __remove_empty_lines(text: str, strip_lines=True, linesep=None) -> str:
         return linesep.join([line for line in text.splitlines() if line.strip()])
 
 
+class __AsciiReaderProgress:
+    """Helper for periodic progress updates while reading ASCII files."""
+
+    def __init__(self, filename: str, count: int, item_name: str, verbose=1, progress_interval=1.0) -> None:
+
+        if progress_interval <= 0:
+            raise ValueError('"progress_interval" should be larger than zero')
+
+        self.filename = filename
+        self.count = count
+        self.item_name = item_name
+        self.verbose = verbose
+        self.progress_interval = progress_interval
+        self._last_update = time.perf_counter()
+
+        if self.verbose > 0:
+            print(f"Reading ascii file {self.filename} ...", end=" ")
+
+    def update(self, processed: int) -> None:
+
+        if self.verbose <= 0:
+            return
+        if processed >= self.count:
+            return
+
+        now = time.perf_counter()
+        if now - self._last_update >= self.progress_interval:
+            print(
+                f"\rReading ascii file {self.filename} ... read {processed}/{self.count} {self.item_name}",
+                end="",
+                flush=True,
+            )
+            self._last_update = now
+
+    def finish(self, message: str) -> None:
+
+        if self.verbose > 0:
+            print(f"\rReading ascii file {self.filename} ... {message}")
+
+
 def __protected_split(text: str, sep=" \t", protected=("(", ")")) -> List[str]:
     """Split string while protecting contents within given container.
 
@@ -173,7 +213,7 @@ def __dictionary_to_string(name: str, dictionary: dict) -> str:
     return result
 
 
-def read_faces(filename: str, dtype: DTypeLike, byteorder="little", verbose=1) -> Tuple[NDArray, NDArray]:
+def read_faces(filename: str, dtype: DTypeLike, byteorder="little", verbose=1, progress_interval=1.0) -> Tuple[NDArray, NDArray]:
     """Reads the "faces" file and returns face definitions.
 
     The format of the file is taken from the "format" entry in the FoamFile dict.
@@ -189,6 +229,8 @@ def read_faces(filename: str, dtype: DTypeLike, byteorder="little", verbose=1) -
         Byte order while reading binary files, by default "little".
     verbose : int, optional
         Level of verbosity, by default 1
+    progress_interval : float, optional
+        Minimum time in seconds between progress updates while reading ASCII files, by default 1.0.
 
     Returns
     -------
@@ -241,21 +283,36 @@ def read_faces(filename: str, dtype: DTypeLike, byteorder="little", verbose=1) -
     elif header["format"] == "ascii":
         _indices = [0]
         _points = []
+        progress = __AsciiReaderProgress(filename, count, "faces", verbose, progress_interval)
         with open(filename, "r") as fh:
-            if verbose > 0:
-                print(f"Reading ascii file {filename} ...", end=" ")
             fh.seek(offset)
-            # Read all lines, pre-split at newline characters
-            lines = fh.readlines()
-        for line in lines[1:-1]:
-            _indices.append(line[0])
-            _points.extend([point for point in line[2:-2].split()])
+            opening_line = fh.readline()
+            if opening_line.strip() != "(":
+                raise ValueError(f'Expected "(" before face definitions in {filename}, found {opening_line!r}')
+
+            for face in range(count):
+                line = fh.readline()
+                if not line:
+                    raise ValueError(f"Unexpected end of file while reading face {face} from {filename}")
+
+                # Extract the section between "(" and ")"
+                start_index = line.find("(")  # Start index is not necessarily static
+                end_index = line.find(")")
+                if start_index == -1 or end_index == -1:
+                    raise ValueError(f"Invalid face definition: {line}")
+                _indices.append(line[:start_index].strip())
+                _points.extend([point for point in line[start_index + 1 : end_index].split()])
+                progress.update(face + 1)
+
         indices = np.cumsum(np.array(_indices, dtype=dtype), dtype=dtype)
         points = np.array(_points, dtype=dtype)
 
     if verbose > 0:
         toc = time.perf_counter()
-        print(f"read {len(indices) -1 } faces in {toc - tic:0.4f} seconds.", flush=True)
+        if header["format"] == "ascii":
+            progress.finish(f"read {len(indices) - 1} faces in {toc - tic:0.4f} seconds.")
+        else:
+            print(f"read {len(indices) - 1} faces in {toc - tic:0.4f} seconds.", flush=True)
 
     return indices, points
 
@@ -356,7 +413,7 @@ def write_faces(
         print(f"wrote {point_indices.size - 1} faces in {toc - tic:0.4f} seconds.", flush=True)
 
 
-def read_vector_field(filename: str, dtype: DTypeLike, ndims=3, byteorder="little", verbose=1) -> NDArray:
+def read_vector_field(filename: str, dtype: DTypeLike, ndims=3, byteorder="little", verbose=1, progress_interval=1.0) -> NDArray:
     """Reads a vector field.
 
     The format of the file is taken from the "format" entry in the FoamFile dict.
@@ -373,6 +430,8 @@ def read_vector_field(filename: str, dtype: DTypeLike, ndims=3, byteorder="littl
         Byte order for binary reading, by default "little"
     verbose : int, optional
         Level of verbosity, by default 1
+    progress_interval : float, optional
+        Minimum time in seconds between progress updates while reading ASCII files, by default 1.0.
 
     Returns
     -------
@@ -402,20 +461,37 @@ def read_vector_field(filename: str, dtype: DTypeLike, ndims=3, byteorder="littl
             buf = fh.read(item_size * count * ndims)
         data = np.frombuffer(buf, dtype=dtype).reshape(count, ndims)
     elif header["format"] == "ascii":
+        progress = __AsciiReaderProgress(filename, count, "vectors", verbose, progress_interval)
+        _data = []
         with open(filename, "r") as fh:
-            if verbose > 0:
-                print(f"Reading ascii file {filename} ...", end=" ")
             fh.seek(offset)
-            # Read all lines and split at newline characters
-            lines = fh.readlines()
-        data = np.array([line[1:-2].split() for line in lines[1 : count + 1]], dtype=dtype)
+            opening_line = fh.readline()
+            if opening_line.strip() != "(":
+                raise ValueError(f'Expected "(" before vector definitions in {filename}, found {opening_line!r}')
+
+            for vector in range(count):
+                line = fh.readline()
+                if not line:
+                    raise ValueError(f"Unexpected end of file while reading vector {vector} from {filename}")
+
+                start_index = line.find("(")
+                end_index = line.rfind(")")
+                if start_index == -1 or end_index == -1:
+                    raise ValueError(f"Invalid vector definition: {line}")
+                _data.append(line[start_index + 1 : end_index].split())
+                progress.update(vector + 1)
+
+        data = np.array(_data, dtype=dtype)
 
     if verbose > 0:
         toc = time.perf_counter()
-        print(
-            f"read {count} vectors ({str(np.dtype(dtype))}) in {toc - tic:0.4f} seconds.",
-            flush=True,
-        )
+        if header["format"] == "ascii":
+            progress.finish(f"read {count} vectors ({str(np.dtype(dtype))}) in {toc - tic:0.4f} seconds.")
+        else:
+            print(
+                f"read {count} vectors ({str(np.dtype(dtype))}) in {toc - tic:0.4f} seconds.",
+                flush=True,
+            )
 
     # NOTE: For some large files, the array "data" was set to read-only and not modifiable,
     # which seems to be a bug with numba 0.58.1. Below is a workaround to ensure a writeable array
@@ -513,7 +589,7 @@ def write_vector_field(
         )
 
 
-def read_scalar_field(filename: str, dtype: DTypeLike, byteorder="little", verbose=1) -> NDArray:
+def read_scalar_field(filename: str, dtype: DTypeLike, byteorder="little", verbose=1, progress_interval=1.0) -> NDArray:
     """Reads a scalar field.
 
     Parameters
@@ -526,6 +602,8 @@ def read_scalar_field(filename: str, dtype: DTypeLike, byteorder="little", verbo
         Byte order for binary reading, by default "little"
     verbose : int, optional
         Level of verbosity, by default 1
+    progress_interval : float, optional
+        Minimum time in seconds between progress updates while reading ASCII files, by default 1.0.
 
     Returns
     -------
@@ -553,21 +631,33 @@ def read_scalar_field(filename: str, dtype: DTypeLike, byteorder="little", verbo
             buf = fh.read(np.dtype(dtype).itemsize * count)
         data = np.frombuffer(buf, dtype=dtype)
     elif header["format"] == "ascii":
+        progress = __AsciiReaderProgress(filename, count, "scalars", verbose, progress_interval)
+        _data = []
         with open(filename, "r") as fh:
-            if verbose > 0:
-                print(f"Reading ascii file {filename} ...", end=" ")
             fh.seek(offset)
-            # Read all lines, pre-split at newline characters
-            lines = fh.readlines()
-        # data = np.array(lines[1:-1], dtype=dtype)
-        data = np.array(lines[1 : count + 1], dtype=dtype)
+            opening_line = fh.readline()
+            if opening_line.strip() != "(":
+                raise ValueError(f'Expected "(" before scalar definitions in {filename}, found {opening_line!r}')
+
+            for scalar in range(count):
+                line = fh.readline()
+                if not line:
+                    raise ValueError(f"Unexpected end of file while reading scalar {scalar} from {filename}")
+
+                _data.append(line.strip())
+                progress.update(scalar + 1)
+
+        data = np.array(_data, dtype=dtype)
 
     if verbose > 0:
         toc = time.perf_counter()
-        print(
-            f"read {count} scalars ({str(np.dtype(dtype))}) in {toc - tic:0.4f} seconds.",
-            flush=True,
-        )
+        if header["format"] == "ascii":
+            progress.finish(f"read {count} scalars ({str(np.dtype(dtype))}) in {toc - tic:0.4f} seconds.")
+        else:
+            print(
+                f"read {count} scalars ({str(np.dtype(dtype))}) in {toc - tic:0.4f} seconds.",
+                flush=True,
+            )
 
     return np.array(data)
 

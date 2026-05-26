@@ -46,7 +46,7 @@ class PolyMesh:
         self.__point_offset_log = NDArray
 
         # Read the mesh
-        self._read(path=path)
+        self._read(path=path, **kwargs)
 
         # Initialize offset log to keep track of modifications
         self.reset_offsets()
@@ -1234,8 +1234,10 @@ class PolyMesh:
         return self.__face_offset_log[face]
 
     # TODO: Keyword arguments
-    def _read(self, path: str) -> None:
+    def _read(self, path: str, **kwargs) -> None:
         """Reads the polyMesh and populates internal containers (for internal use)."""
+
+        progress_interval = kwargs.pop("progress_interval", 1.0)
 
         # Points
         self.__points = read_vector_field(
@@ -1243,6 +1245,7 @@ class PolyMesh:
             dtype=self.dtype_float,
             byteorder=self.__byteorder,
             verbose=self.verbose,
+            progress_interval=progress_interval,
         )
         # Face definitions
         self.__face_point_indices, self.__face_point_list = read_faces(
@@ -1250,6 +1253,7 @@ class PolyMesh:
             dtype=self.dtype_int,
             byteorder=self.__byteorder,
             verbose=self.verbose,
+            progress_interval=progress_interval,
         )
         # Face owner list
         self.__face_owner = read_scalar_field(
@@ -1257,6 +1261,7 @@ class PolyMesh:
             dtype=self.dtype_int,
             byteorder=self.__byteorder,
             verbose=self.verbose,
+            progress_interval=progress_interval,
         )
         # Face neighbour list
         self.__face_neighbour = read_scalar_field(
@@ -1264,6 +1269,7 @@ class PolyMesh:
             dtype=self.dtype_int,
             byteorder=self.__byteorder,
             verbose=self.verbose,
+            progress_interval=progress_interval,
         )
         # Bounary dictionary
         self.__boundary = recursive_dictionary_parser(
