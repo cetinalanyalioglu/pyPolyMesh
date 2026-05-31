@@ -3,7 +3,9 @@ from .elements import PENTAHEDRON
 from .elements import POLYHEDRON
 from .elements import PYRAMID
 from .elements import TETRAHEDRON
+from numpy.typing import DTypeLike
 from numpy.typing import NDArray
+from typing import Optional
 from typing import Tuple
 
 import numba as nb
@@ -14,7 +16,53 @@ MAX_POINTS_PER_CELL = 50  # Used to infer if we need to re-allocate during read
 POINTS_PER_CELL = 9  # Has no restrictive effect, only used to estimate initial memory requirement
 
 
-def build_cell_face_list(face_owner: NDArray, face_neighbour: NDArray, verbose=1) -> Tuple[NDArray, NDArray]:
+def _normalize_integer_dtype(dtype: DTypeLike) -> np.dtype:
+    """
+    Ensures that the provided dtype is a NumPy integer dtype.
+
+    Parameters
+    ----------
+    dtype : DTypeLike
+        Input data type to check.
+
+    Returns
+    -------
+    np.dtype
+        The normalized NumPy integer dtype.
+
+    Raises
+    ------
+    TypeError
+        If the input dtype is not an integer type.
+    """
+    dtype = np.dtype(dtype)
+    if not np.issubdtype(dtype, np.integer):
+        raise TypeError(f'Expected an integer dtype, received "{dtype}".')
+
+    return dtype
+
+
+def _validate_integer_array_range(array: NDArray, name: str, dtype: np.dtype) -> None:
+
+    if not np.issubdtype(array.dtype, np.integer):
+        raise TypeError(f'{name} array must have an integer dtype, received "{array.dtype}".')
+
+    if array.size == 0:
+        return
+
+    bounds = np.iinfo(dtype)
+    array_min = int(np.min(array))
+    array_max = int(np.max(array))
+
+    if array_min < bounds.min or array_max > bounds.max:
+        raise ValueError(
+            f'{name} values in the range [{array_min}, {array_max}] cannot be represented with dtype "{dtype}".'
+        )
+
+
+def build_cell_face_list(
+    face_owner: NDArray, face_neighbour: NDArray, verbose=1, dtype: Optional[DTypeLike] = None
+) -> Tuple[NDArray, NDArray]:
     """Computes the compact cell-face list.
 
     The compact cell-face list contains all information regarding the faces of each cell in the grid.
@@ -51,12 +99,14 @@ def build_cell_face_list(face_owner: NDArray, face_neighbour: NDArray, verbose=1
         Face neighbour cell index array
     verbose : int, optional
         Display information, by default 1
+    dtype : DTypeLike, optional
+        Integer dtype to use for the returned arrays. By default, the dtype of the input arrays is used.
 
     Returns
     -------
     Tuple[NDArray, NDArray]
         2-tuple consisting of cell face index pointer array and the cell face index list arrays. The dtype of returned
-        arrays is inferred from the input arrays.
+        arrays is inferred from the input arrays unless a specific dtype is requested.
     """
 
     if face_owner.dtype != face_neighbour.dtype:
@@ -67,6 +117,13 @@ def build_cell_face_list(face_owner: NDArray, face_neighbour: NDArray, verbose=1
         print("Building cell face list ...", end=" ")
 
     cell_face_indices, cell_face_list = __build_cell_face_list_jit(face_owner, face_neighbour)
+
+    if dtype is not None:
+        target_dtype = _normalize_integer_dtype(dtype)
+        _validate_integer_array_range(cell_face_indices, "Cell face indices", target_dtype)
+        _validate_integer_array_range(cell_face_list, "Cell face list", target_dtype)
+        cell_face_indices = cell_face_indices.astype(target_dtype, copy=False)
+        cell_face_list = cell_face_list.astype(target_dtype, copy=False)
 
     if verbose > 0:
         toc = time.perf_counter()
@@ -81,6 +138,7 @@ def build_cell_point_list(
     cell_face_indices: NDArray,
     cell_face_list: NDArray,
     verbose=1,
+    dtype: Optional[DTypeLike] = None,
 ) -> Tuple[NDArray, NDArray]:
     """Assembles the cell-point list.
 
@@ -105,12 +163,14 @@ def build_cell_point_list(
         Cell face index list array, shape (n_cell_faces)
     verbose : int, optional
         Display information, by default 1
+    dtype : DTypeLike, optional
+        Integer dtype to use for the returned arrays. By default, the dtype of the input arrays is used.
 
     Returns
     -------
     Tuple[NDArray, NDArray]
         2-tuple consisting of cell point index pointer array and the cell point list arrays. The dtype of returned
-        arrays is inferred from the input arrays.
+        arrays is inferred from the input arrays unless a specific dtype is requested.
     """
 
     if not all(arr.dtype == face_point_indices.dtype for arr in [face_point_list, cell_face_indices, cell_face_list]):
@@ -123,6 +183,13 @@ def build_cell_point_list(
     cell_point_indices, cell_point_list = __build_cell_point_list_jit(
         face_point_indices, face_point_list, cell_face_indices, cell_face_list
     )
+
+    if dtype is not None:
+        target_dtype = _normalize_integer_dtype(dtype)
+        _validate_integer_array_range(cell_point_indices, "Cell point indices", target_dtype)
+        _validate_integer_array_range(cell_point_list, "Cell point list", target_dtype)
+        cell_point_indices = cell_point_indices.astype(target_dtype, copy=False)
+        cell_point_list = cell_point_list.astype(target_dtype, copy=False)
 
     if verbose > 0:
         toc = time.perf_counter()
@@ -140,6 +207,7 @@ def build_ordered_cell_point_list(
     cell_face_indices: NDArray,
     cell_face_list: NDArray,
     verbose=1,
+    dtype: Optional[DTypeLike] = None,
 ) -> Tuple[NDArray, NDArray, NDArray]:
     """Assembles the ordered cell-point list.
 
@@ -178,11 +246,14 @@ def build_ordered_cell_point_list(
         Cell face index list array, shape (n_cell_faces)
     verbose : int, optional
         Display information, by default 1
+    dtype : DTypeLike, optional
+        Integer dtype to use for the returned arrays. By default, the dtype of the input arrays is used.
 
     Returns
     -------
     Tuple[NDArray, NDArray, NDArray]
-        3-tuple consisting of cell types, cell point index pointer array and the cell face point list arrays
+        3-tuple consisting of cell types, cell point index pointer array and the cell face point list arrays. The
+        dtype of returned arrays is inferred from the input arrays unless a specific dtype is requested.
     """
 
     if not all(arr.dtype == points.dtype for arr in [face_centroids, face_area_vectors]):
@@ -204,6 +275,15 @@ def build_ordered_cell_point_list(
         cell_face_indices,
         cell_face_list,
     )
+
+    if dtype is not None:
+        target_dtype = _normalize_integer_dtype(dtype)
+        _validate_integer_array_range(cell_types, "Cell types", target_dtype)
+        _validate_integer_array_range(cell_point_indices, "Cell point indices", target_dtype)
+        _validate_integer_array_range(cell_point_list, "Cell point list", target_dtype)
+        cell_types = cell_types.astype(target_dtype, copy=False)
+        cell_point_indices = cell_point_indices.astype(target_dtype, copy=False)
+        cell_point_list = cell_point_list.astype(target_dtype, copy=False)
 
     if verbose > 0:
         toc = time.perf_counter()
@@ -296,7 +376,8 @@ def __build_cell_point_list_jit(
 
         # Check size and reallocate if necessary
         if total_count + MAX_POINTS_PER_CELL > cell_point_list.size:
-            cell_point_list = np.concatenate((cell_point_list, np.empty(n_cells, dtype=dtype)))
+            extra_size = max(n_cells, MAX_POINTS_PER_CELL)
+            cell_point_list = np.concatenate((cell_point_list, np.empty(extra_size, dtype=dtype)))
 
         # Get indices of faces of this cell
         cell_faces = cell_face_list[cell_face_indices[cell_idx] : cell_face_indices[cell_idx + 1]]
@@ -316,6 +397,10 @@ def __build_cell_point_list_jit(
 
             start = total_count + count
             end = start + n_face_points
+
+            if end > cell_point_list.size:
+                extra_size = max(end - cell_point_list.size, n_cells, MAX_POINTS_PER_CELL)
+                cell_point_list = np.concatenate((cell_point_list, np.empty(extra_size, dtype=dtype)))
 
             cell_point_list[start:end] = face_points
 
@@ -378,7 +463,8 @@ def __build_ordered_cell_point_list_jit(
 
         # Check size and reallocate if necessary
         if total_count + MAX_POINTS_PER_CELL > cell_point_list.size:
-            cell_point_list = np.concatenate((cell_point_list, np.full(n_cells, -1, dtype=dtype)))
+            extra_size = max(n_cells, MAX_POINTS_PER_CELL)
+            cell_point_list = np.concatenate((cell_point_list, np.full(extra_size, -1, dtype=dtype)))
 
         # Get indices of faces of this cell
         cell_faces = cell_face_list[cell_face_indices[cell_idx] : cell_face_indices[cell_idx + 1]]
@@ -525,6 +611,9 @@ def __build_ordered_cell_point_list_jit(
                 face_points = face_point_list[face_point_indices[face_idx] : face_point_indices[face_idx + 1]]
                 for point in face_points:
                     if point not in cell_point_list[total_count : total_count + count]:
+                        if total_count + count + 1 > cell_point_list.size:
+                            extra_size = max(total_count + count + 1 - cell_point_list.size, n_cells, MAX_POINTS_PER_CELL)
+                            cell_point_list = np.concatenate((cell_point_list, np.full(extra_size, -1, dtype=dtype)))
                         cell_point_list[total_count + count] = point
                         count += 1
             # Fill the index pointer array

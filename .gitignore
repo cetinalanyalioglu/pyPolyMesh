@@ -2,7 +2,12 @@
 !*/
 !.gitignore
 !pypolymesh/*
+!pypolymesh/**
+!tests/**
 !pyproject.toml
 !README.md
 !poetry.lock
 !requirements-dev.txt
+__pycache__/
+*.pyc
+Scratch/*

@@ -8,6 +8,11 @@ authors = ["Cetin Alanyalioglu <cetinalanyalioglu@gmail.com>"]
 python = "^3.8.1"
 numpy = "^1.24.4"
 numba = "^0.58.1"
+transformations = "^2025.1.1"
+plotly = { version = "^6.0.0", optional = true }
+
+[tool.poetry.extras]
+plotting = ["plotly"]
 
 [tool.poetry.dev-dependencies]
 isort = "^5.13.2"
