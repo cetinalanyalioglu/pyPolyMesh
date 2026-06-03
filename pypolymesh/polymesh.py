@@ -247,6 +247,36 @@ class PolyMesh:
 
         return self.__points
 
+    def scale(self, factors: ArrayLike) -> None:
+        """Scale all mesh points component-wise.
+
+        This utility performs an in-place coordinate scaling:
+
+        ``x' = sx * x, y' = sy * y, z' = sz * z``
+
+        where ``(sx, sy, sz)`` are the user-provided scaling factors.
+
+        Parameters
+        ----------
+        factors : ArrayLike
+            Scaling factors for each coordinate component in the order
+            ``(sx, sy, sz)``.
+
+        Raises
+        ------
+        ValueError
+            If ``factors`` cannot be interpreted as a one-dimensional sequence
+            of three finite values.
+        """
+
+        factors_array = np.asarray(factors, dtype=self.dtype_float)
+        if factors_array.shape != (3,):
+            raise ValueError('"factors" must be a one-dimensional array-like with shape (3,)')
+        if not np.all(np.isfinite(factors_array)):
+            raise ValueError('"factors" must only contain finite values')
+
+        self.__points *= factors_array
+
     @property
     def verbose(self) -> int:
         """Level of verbosity, higher numbers print more information to screen, 0 disables printing.
