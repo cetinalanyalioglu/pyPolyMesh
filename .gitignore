@@ -4,6 +4,7 @@
 !pypolymesh/*
 !pypolymesh/**
 !tests/**
+!docs/**
 !pyproject.toml
 !README.md
 !poetry.lock

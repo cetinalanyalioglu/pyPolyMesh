@@ -1,59 +1,86 @@
 # pyPolyMesh
 
-This is a small library that can read, write and modify meshes in OpenFOAM ```polyMesh``` format.
-Currently only documentation is within docstrings.
+A Python library to read, write, and modify OpenFOAM `polyMesh` meshes in memory. It focuses on mesh topology and geometry: boundary inspection, connectivity builders, in-place mesh edits, scaling, and diagnostics for manually specified cyclic patch pairs.
+
+Detailed guides live under [`docs/`](docs/).
+
+## Features
+
+- Read and write ASCII or binary `constant/polyMesh` (points, faces, owner, neighbour, boundary)
+- Query mesh topology via `PolyMesh` (cells, faces, boundaries, adjacency)
+- Build compact cell–face and cell–point connectivity arrays
+- Compute geometrial properties (face areas and centroids)
+- Modify meshes in place (merge cells, boundary edits, point scaling, and more)
+- Diagnostics (currently only checking of cyclic/periodic patch pairs)([diagnostics](docs/diagnostics.md))
+
+## Requirements
+
+- Python 3.8+
+- NumPy, Numba
+- `transformations` (cyclic diagnostics)
 
 ## Installation
-1. Clone this repository
-2. Run ```pip install .``` in the cloned repository folder
 
-Alternatively, use ```pip install - e .``` for an interactive install if you are planning to work on the source code.
-This way the changes are going to be reflected without a need to reinstall the package.
+Clone the repository and install from the project root:
 
-## Incomplete example
+```bash
+pip install .
+```
+
+Editable install while developing:
+
+```bash
+pip install -e .
+```
+## Quick start
+
+Point `PolyMesh` at a case directory (the folder that contains `constant/polyMesh`):
+
 ```python
 from pypolymesh import PolyMesh
-from pypolymesh.geometry import compute_face_areas_and_centroids
-from pypolymesh.connectivity import build_cell_face_list, build_cell_point_list, build_ordered_cell_point_list
 
-# Read an OpenFOAM mesh (ascii/binary, by default expects int32 and float64)
-mesh = PolyMesh("path/to/case/folder")
+# Can read and auto-detect both binary and ascii, by default expects int32 and float64
+mesh = PolyMesh("path/to/case")
 
-# Build cell face list
-cell_face_indices, cell_face_list = build_cell_face_list(mesh.face_owner, mesh.face_neighbour)
+# Display some information - many intuitive methods under PolyMeesh class
+print(mesh.n_points, mesh.n_cells, mesh.n_faces, mesh.n_boundaries)
+print(list(mesh.boundary.keys())[:5])
 
-# Extract face indices of 1264'th cell
-cell_faces = cell_face_list[cell_face_indices[1263] : cell_face_indices[1264]]
+# Inspect one boundary patch
+patch = "inlet"
+print(mesh.boundary[patch])
+face_ids = mesh.boundary_faces(patch)
+print("first face points:", mesh.face_points(face_ids[0]))
 
-# Above information is also available using PolyMesh.cell_faces
-# Instead of building the cell-face list, this will do a local evaluation (expensive for multiple requests)
-cell_faces = mesh.cell_faces(1263)
+# Scale coordinates (topology arrays are unchanged)
+mesh.scale((0.001, 0.001, 0.001))  # mm -> m, for example
 
-# The face -> point connectivity is automatically built during read.
-# Extract the ordered point sequence defining face 124
-face_points = mesh.face_point_list[mesh.face_point_indices[124] : mesh.face_point_indices[125]]
-# is identical to
-face_points = mesh.face_points(124)
-# For a valid mesh the point sequence follows a counter-clockwise orientation.
-
-# Compute face areas and centroids (uses the exact same method in OpenFOAM)
-face_centroids, face_area_vectors = compute_face_areas_and_centroids(mesh.points, mesh.face_point_indices, 
-    mesh.face_point_list)
-
-# Build non-ordered cell-point list
-cell_point_indices, cell_point_list = build_cell_point_list(mesh.face_point_indices, mesh.face_point_list,
-    cell_face_indices, cell_face_list)
-
-# Extract points referered by cell 1263
-cell_points = cell_point_list[cell_point_indices[1263] : cell_point_indices[1264]]
-# Above information is also available using PolyMesh.cell_points
-# Instead of building the cell-point list, this will do a local evaluation (expensive for multiple requests)
-cell_points = mesh.cell_points(1263)
-
-# Build the ordered cell-pont list
-# The ordered cell point list follows the VTK convention for the point ordering of standard elements (non-polyhedra)
-cell_types, cell_point_indices, cell_point_list = build_ordered_cell_point_list(mesh.points,
-    mesh.face_point_indices, mesh.face_point_list, face_centroids, face_area_vectors, cell_face_indices,
-    cell_face_list)
-
+# Write mesh back under a new case path in ASCII Format
+mesh.write("path/to/output_case", mode="ascii")
 ```
+
+See [Getting started](docs/getting-started.md) for dtypes, verbosity, and write options.
+
+## Documentation
+
+| Guide | Description |
+|-------|-------------|
+| [Getting started](docs/getting-started.md) | Install, load/save, core properties |
+| [Connectivity and geometry](docs/connectivity-and-geometry.md) | Cell–face/point lists, areas, ordered VTK-style points |
+| [Mesh modification](docs/mesh-modification.md) | Edits, scaling, current vs original indices |
+| [Diagnostics](docs/diagnostics.md) | Cyclic / periodic patch pair checks |
+| [Visualization](docs/visualization.md) | Plotly primitives (**in development**) |
+
+API details are also available in module and class docstrings.
+
+## Development
+
+Run tests from the repository root:
+
+```bash
+python -m unittest discover -s tests -v
+```
+
+## Status and limitations
+- **Mesh modification features are experimental**
+- The `pypolymesh.visualization` package is under active development and is not yet a supported end-user plotting API.
